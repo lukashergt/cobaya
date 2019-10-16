@@ -38,7 +38,9 @@ class polychord(Sampler):
         # If path not given, try using general path to modules
         if not self.path and self.path_install:
             self.path = get_path(self.path_install)
-        if self.path:
+        if self.path == "global":
+            self.log.info("Importing *global* PolyChord.")
+        elif self.path:
             if am_single_or_primary_process():
                 self.log.info("Importing *local* PolyChord from " + self.path)
                 if not os.path.exists(os.path.realpath(self.path)):

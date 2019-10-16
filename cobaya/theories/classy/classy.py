@@ -170,7 +170,9 @@ class classy(_cosmo):
         # If path not given, try using general path to modules
         if not self.path and self.path_install:
             self.path = self.get_path(self.path_install)
-        if self.path:
+        if self.path == "global":
+            self.log.info("Importing *global* CLASS.")
+        elif self.path:
             self.log.info("Importing *local* classy from " + self.path)
             classy_build_path = os.path.join(self.path, "python", "build")
             post = next(d for d in os.listdir(classy_build_path) if d.startswith("lib."))
