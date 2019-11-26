@@ -1,12 +1,34 @@
-## 2.0.X – 2019-09-XX
+## 2.X  – 2019-XX-XX
 
 ### Samplers
 
-- MCMC: Bugfix in `mcmc`: using deprecated Pandas DataFrame method (#40). Thanks Zack Li (@xzackli)
+#### MCMC
+
+- Added progress tracking (incl. acceptance rate), and a plotting tool for it.
+## 2.0.3 – 2019-09-09
+
+### Samplers
+
+#### PolyChord
+
+- Fixed too much oversampling when manual bloking (#35). Thanks Lukas Hergt (@lukashergt), Vivian Miranda (@vivianmiranda) and Will Handley (@williamjameshandley)
+- Fixed ifort compatibility (#39, PR #42). Thanks Lukas Hergt (@lukashergt)
+
+#### MCMC
+
+- Fixed: using deprecated Pandas DataFrame method (#40). Thanks Zack Li (@xzackli)
+
+#### Minimize
+
+- Added GetDist output for best-fit (`ignore-prior: True`)
+
+### Likelihoods
+
+- Added `stop_at_error` for likelihoods -- fixes #43. Thanks Lukas Hergt (@lukashergt)
 
 ### Cosmology
 
-- Bugfix in `cobaya-cosmo-generator` in Python 2 (#37)
+- Fixed `cobaya-cosmo-generator` in for Python 2 (#37, thanks Lukas Hergt, @lukashergt) and high-DPI screens (#41).
 
 
 ## 2.0 – 2019-08-20

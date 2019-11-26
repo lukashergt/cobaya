@@ -25,10 +25,11 @@ from cobaya.mpi import get_mpi_size, get_mpi_rank, get_mpi_comm
 from cobaya.mpi import more_than_one_process, am_single_or_primary_process, sync_processes
 from cobaya.collection import Collection, OnePoint
 from cobaya.conventions import _weight, _p_proposal, _p_renames, _sampler, _minuslogpost
-from cobaya.conventions import _line_width, _path_install
+from cobaya.conventions import _line_width, _path_install, _progress_extension
 from cobaya.samplers.mcmc.proposal import BlockedProposer
 from cobaya.log import LoggedError
 from cobaya.tools import get_external_function, read_dnumber, relative_to_int
+from cobaya.tools import load_DataFrame
 from cobaya.yaml import yaml_dump_file
 from cobaya.output import OutputDummy
 
@@ -177,6 +178,14 @@ class mcmc(Sampler):
                 get_external_function(self.callback_function))
         # Useful for getting last points added inside callback function
         self.last_point_callback = 0
+        # Monitoring progress
+        if am_single_or_primary_process():
+            cols = ["N", "acceptance_rate", "Rminus1", "Rminus1_cl"]
+            self.progress = DataFrame(columns=cols)
+            self.i_checkpoint = 1
+            if self.output and not self.resuming:
+                with open(self.progress_filename(), "w") as progress_file:
+                    progress_file.write("# " + " ".join(self.progress.columns) + "\n")
 
     def initial_proposal_covmat(self, slow_params=None):
         """
@@ -351,6 +360,8 @@ class mcmc(Sampler):
             # Checking convergence and (optionally) learning the covmat of the proposal
             if self.check_all_ready():
                 self.check_convergence_and_learn_proposal()
+                if am_single_or_primary_process():
+                    self.i_checkpoint += 1
             if self.n() == self.effective_max_samples:
                 self.log.info("Reached maximum number of accepted steps allowed. "
                               "Stopping.")
@@ -583,9 +594,11 @@ class mcmc(Sampler):
         """
         if more_than_one_process():
             # Compute and gather means, covs and CL intervals of last half of chains
-            mean = self.collection.mean(first=int(self.n() / 2))
-            cov = self.collection.cov(first=int(self.n() / 2))
-            mcsamples = self.collection._sampled_to_getdist_mcsamples(first=int(self.n() / 2))
+            use_first = int(self.n() / 2)
+            mean = self.collection.mean(first=use_first)
+            cov = self.collection.cov(first=use_first)
+            mcsamples = self.collection._sampled_to_getdist_mcsamples(first=use_first)
+            acceptance_rate = self.n() / self.collection[_weight].sum()
             try:
                 bound = np.array([[
                     mcsamples.confidence(i, limfrac=self.Rminus1_cl_level / 2., upper=which)
@@ -594,9 +607,9 @@ class mcmc(Sampler):
             except:
                 bound = None
                 success_bounds = False
-            Ns, means, covs, bounds = map(
+            Ns, means, covs, bounds, acceptance_rates = map(
                 lambda x: np.array(get_mpi_comm().gather(x)),
-                [self.n(), mean, cov, bound])
+                [self.n(), mean, cov, bound, acceptance_rate])
         else:
             # Compute and gather means, covs and CL intervals of last m-1 chain fractions
             m = 1 + self.Rminus1_single_split
@@ -617,6 +630,7 @@ class mcmc(Sampler):
                     first=i * cut, last=(i + 1) * cut - 1)
                 for i in range(1, m)]
             logging.disable(logging.NOTSET)
+            acceptance_rates = self.n() / self.collection[_weight].sum()
             try:
                 bounds = [np.array(
                     [[mcs.confidence(i, limfrac=self.Rminus1_cl_level / 2., upper=which)
@@ -628,6 +642,16 @@ class mcmc(Sampler):
                 success_bounds = False
         # Compute convergence diagnostics
         if am_single_or_primary_process():
+            self.progress.at[self.i_checkpoint, "N"] = (
+                sum(Ns) if more_than_one_process() else self.n())
+            acceptance_rate = (
+                np.average(acceptance_rates, weights=Ns)
+                if more_than_one_process() else acceptance_rates)
+            self.log.info("Acceptance rate: %.3f" +
+                          (" = avg(%r)" % list(acceptance_rates)
+                           if more_than_one_process() else ""),
+                          acceptance_rate)
+            self.progress.at[self.i_checkpoint, "acceptance_rate"] = acceptance_rate
             # "Within" or "W" term -- our "units" for assessing convergence
             # and our prospective new covariance matrix
             mean_of_covs = np.average(covs, weights=Ns, axis=0)
@@ -662,6 +686,7 @@ class mcmc(Sampler):
                     success = False
                 if success:
                     Rminus1 = max(np.abs(eigvals))
+                    self.progress.at[self.i_checkpoint, "Rminus1"] = Rminus1
                     # For real square matrices, a possible def of the cond number is:
                     condition_number = Rminus1 / min(np.abs(eigvals))
                     self.log.debug("Condition number = %g", condition_number)
@@ -680,13 +705,15 @@ class mcmc(Sampler):
                             Rminus1_cl = (np.std(bounds, axis=0).T /
                                           np.sqrt(np.diag(mean_of_covs)))
                             self.log.debug("normalized std's of bounds = %r", Rminus1_cl)
+                            Rminus1_cl = np.max(Rminus1_cl)
+                            self.progress.at[self.i_checkpoint, "Rminus1_cl"] = Rminus1_cl
                             self.log.info(
                                 "Convergence of bounds: R-1 = %f after %d " % (
-                                    np.max(Rminus1_cl),
+                                    Rminus1_cl,
                                     (sum(Ns) if more_than_one_process() else self.n())) +
                                 "accepted steps" +
                                 (" = sum(%r)" % list(Ns) if more_than_one_process() else ""))
-                            if np.max(Rminus1_cl) < self.Rminus1_cl_stop:
+                            if Rminus1_cl < self.Rminus1_cl_stop:
                                 self.converged = True
                                 self.log.info("The run has converged!")
                             self._Ns = Ns
@@ -750,7 +777,11 @@ class mcmc(Sampler):
                              "d")],  # to avoid overweighting last point of prev. run
                 ["mpi_size", get_mpi_size()]])}}
             yaml_dump_file(checkpoint_filename, checkpoint_info, error_if_exists=False)
-            self.log.debug("Dumped checkpoint info and current covmat.")
+            if not self.progress.empty:
+                with open(self.progress_filename(), "a") as progress_file:
+                    progress_file.write(
+                        self.progress.tail(1).to_string(header=False, index=False) + "\n")
+            self.log.debug("Dumped checkpoint and progress info, and current covmat.")
 
     # Finally: returning the computed products ###########################################
 
@@ -761,4 +792,59 @@ class mcmc(Sampler):
         Returns:
            The sample ``Collection`` containing the accepted steps.
         """
-        return {"sample": self.collection}
+        products = {"sample": self.collection}
+        if am_single_or_primary_process():
+            products.update({"progress": self.progress})
+        return products
+
+
+# Plotting tool for chain progress #######################################################
+
+def plot_progress(progress, ax=None, index=None, figure_kwargs={}, legend_kwargs={}):
+    """
+    Plots progress of one or more MCMC runs: evolution of R-1
+    (for means and c.l. intervals) and acceptance rate.
+
+    Takes a ``progress`` instance (actually a ``pandas.DataFrame``,
+    returned as part of the sampler ``products``),
+    a chain ``output`` prefix, or a list of any of those
+    for plotting progress of several chains at once.
+
+    You can use ``figure_kwargs`` and ``legend_kwargs`` to pass arguments to
+    ``matplotlib.pyplot.figure`` and ``matplotlib.pyplot.legend`` respectively.
+
+    Return a subplots axes array. Display with ``matplotlib.pyplot.show()``.
+
+    """
+    if ax is None:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(nrows=2, sharex=True, **figure_kwargs)
+    if isinstance(progress, DataFrame):
+        pass  # go on to plotting
+    elif isinstance(progress, six.string_types):
+        try:
+            if not progress.endswith(_progress_extension):
+                progress += _progress_extension
+            progress = load_DataFrame(progress)
+            # 1-based
+            progress.index = np.arange(1, len(progress) + 1)
+        except:
+            raise ValueError("Cannot load progress file %r" % progress)
+    elif hasattr(type(progress), "__iter__"):
+        # Assume is a list of progress'es
+        for i, p in enumerate(progress):
+            plot_progress(p, ax=ax, index=i+1)
+        return ax
+    else:
+        raise ValueError("Cannot understand progress argument: %r" % progress)
+    # Plot!
+    tag_pre = "" if index is None else "%d : " % index
+    p = ax[0].semilogy(progress.N, progress.Rminus1,
+                       "o-", label=tag_pre + "means")
+    ax[0].semilogy(progress.N, progress.Rminus1_cl,
+                   "x:", c=p[0].get_color(), label=tag_pre + "bounds")
+    ax[0].set_ylabel(r"$R-1$")
+    ax[0].legend(**legend_kwargs)
+    ax[1].plot(progress.N, progress.acceptance_rate, "o-")
+    ax[1].set_ylabel(r"acc. rate")
+    return ax

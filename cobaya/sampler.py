@@ -52,8 +52,8 @@ import logging
 import numpy as np
 
 # Local
-from cobaya.conventions import _sampler, _checkpoint_extension, _covmat_extension
-from cobaya.conventions import _resume_default
+from cobaya.conventions import _sampler, _resume_default, _checkpoint_extension
+from cobaya.conventions import _covmat_extension, _progress_extension
 from cobaya.tools import get_class
 from cobaya.log import LoggedError, HasLogger
 from cobaya.yaml import yaml_load_file
@@ -154,6 +154,7 @@ class Sampler(HasLogger, HasDefaults):
         else:
             try:
                 os.remove(self.checkpoint_filename())
+                os.remove(self.progress_filename())
             except (OSError, TypeError):
                 pass
         self.initialize()
@@ -162,6 +163,12 @@ class Sampler(HasLogger, HasDefaults):
         if self.output:
             return os.path.join(
                 self.output.folder, self.output.prefix + _checkpoint_extension)
+        return None
+
+    def progress_filename(self):
+        if self.output:
+            return os.path.join(
+                self.output.folder, self.output.prefix + _progress_extension)
         return None
 
     def covmat_filename(self):
