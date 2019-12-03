@@ -191,7 +191,8 @@ class classy(_cosmo):
         else:
             self.log.info("Importing *global* CLASS.")
         try:
-            from classy import Class, CosmoSevereError, CosmoComputationError
+            from classy import Class, CosmoSevereError, CosmoComputationError, __version__
+            self.log.info("CLASS version %s" % __version__)
         except ImportError:
             raise LoggedError(
                 self.log, "Couldn't find the CLASS python interface. "
