@@ -167,22 +167,8 @@ class polychord(Sampler):
             self.nDims, self.nDerived, seed=(self.seed if self.seed is not None else -1),
             **{p: getattr(self, p) for p in pc_args if getattr(self, p) is not None})
         # prior conversion from the hypercube
-        bounds = self.model.prior.bounds(
-            confidence_for_unbounded=self.confidence_for_unbounded)
-        # Check if priors are bounded (nan's to inf)
-        inf = np.where(np.isinf(bounds))
-        if len(inf[0]):
-            params_names = self.model.parameterization.sampled_params()
-            params = [params_names[i] for i in sorted(list(set(inf[0])))]
-            raise LoggedError(
-                self.log, "PolyChord needs bounded priors, but the parameter(s) '"
-                          "', '".join(params) + "' is(are) unbounded.")
-        locs = bounds[:, 0]
-        scales = bounds[:, 1] - bounds[:, 0]
         # This function re-scales the parameters AND puts them in the right order
         self.pc_prior = lambda x: [self.model.prior.pdf[i].ppf(xi) for i, xi in enumerate(np.array(x)[self.ordering])]
-        # We will need the volume of the prior domain, since PolyChord divides by it
-        self.logvolume = np.log(np.prod(scales))
         # Prepare callback function
         if self.callback_function is not None:
             self.callback_function_callable = (
@@ -242,7 +228,7 @@ class polychord(Sampler):
         # Don't forget to multiply by the volume of the physical hypercube,
         # since PolyChord divides by it
         def logpost(params_values):
-            logposterior, logpriors, loglikes, derived = (
+            _, logpriors, loglikes, derived = (
                 self.model.logposterior(params_values))
             if len(derived) != self.n_derived:
                 derived = np.full(self.n_derived, np.nan)
