@@ -125,7 +125,7 @@ class _planck_clik_prototype(Likelihood):
         for cl_key, cl_array in cl.items():
             if cl_key != 'ell':
                 if np.any(np.isnan(cl_array)):
-                    self.log.error("Encountered nans. Returning logzero and carrying on: \n"
+                    self.log.error("nans in cl: returning logzero and carrying on: \n"
                                    "params_values = %s \n"
                                    "cl = %s" % (params_values, cl))
                     return -np.inf
