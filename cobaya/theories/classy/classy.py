@@ -295,14 +295,14 @@ class classy(BoltzmannBase):
             self.extra_args["modes"] = "s,t"
         # If B spectrum with l>50, or lensing, recommend using Halofit
         cls = self._must_provide.get("Cl", {})
-        if (((any(("b" in cl.lower()) for cl in cls) and
-              max(cls[cl] for cl in cls if "b" in cl.lower()) > 50) or
-             any(("p" in cl.lower()) for cl in cls) and
-             not self.extra_args.get("non linear"))):
-            self.log.warning("Requesting BB for ell>50 or lensing Cl's: "
-                             "using a non-linear code is recommended (and you are not "
-                             "using any). To activate it, set "
-                             "'non_linear: halofit|hmcode|...' in classy's 'extra_args'.")
+        if ((any(("b" in cl.lower()) for cl in cls)
+             and max(cls[cl] for cl in cls if "b" in cl.lower()) > 50)
+                or any(("p" in cl.lower()) for cl in cls)):
+            if not self.extra_args.get("non linear"):
+                self.log.warning("Requesting BB for ell>50 or lensing Cl's: "
+                                 "using a non-linear code is recommended (and you are not "
+                                 "using any). To activate it, set "
+                                 "'non_linear: halofit|hmcode|...' in classy's 'extra_args'.")
         # Cleanup of products string
         self.extra_args["output"] = " ".join(set(self.extra_args["output"].split()))
         self.check_no_repeated_input_extra()
