@@ -24,28 +24,31 @@
     proposal: 0.1
     latex: \xi^{\mathrm{tSZ}\times\mathrm{CIB}}
     renames: xi
-  A_sz:
+  x_sz:
     prior:
       dist: uniform
-      min: 0
-      max: 10
-    ref:
+      min: -10.0
+      max: +16.0
+    latex: x_\mathrm{SZ}
+    drop: true
+  y_sz:
+    prior:
       dist: norm
-      loc: 7
-      scale: 2
-    proposal: 0.6
+      loc: 9.5
+      scale: 3.0
+    proposal: 1.0
+    latex: y_\mathrm{SZ}
+    drop: true
+  A_sz:
+    value: 'lambda x_sz, y_sz: (1.6 * y_sz - x_sz) / (1 + 1.6**2)'
+    min: 0
+    max: 10
     latex: A^\mathrm{tSZ}_{143}
     renames: asz143
   ksz_norm:
-    prior:
-      dist: uniform
-      min: 0
-      max: 10
-    ref:
-      dist: halfnorm
-      loc: 0
-      scale: 3
-    proposal: 1
+    value: 'lambda x_sz, y_sz: (y_sz + 1.6 * x_sz) / (1 + 1.6**2)'
+    min: 0
+    max: 10
     latex: A^\mathrm{kSZ}
     renames: aksz
   # Dust priors
