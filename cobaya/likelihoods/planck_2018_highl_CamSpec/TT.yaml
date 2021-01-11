@@ -11,4 +11,4 @@ speed: 25
 
 params: !defaults [params_calib_CamSpec, params_TT_CamSpec, params_TT_CamSpec_fixedcalpol]
 
-prior: !defaults [prior_SZ_CamSpec]
+#prior: !defaults [prior_SZ_CamSpec]

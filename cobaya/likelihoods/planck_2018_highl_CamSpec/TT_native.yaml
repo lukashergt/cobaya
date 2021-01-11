@@ -14,4 +14,4 @@ speed: 90
 
 params: !defaults [params_calib_CamSpec_native, params_TT_CamSpec]
 
-prior: !defaults [prior_SZ_CamSpec]
+#prior: !defaults [prior_SZ_CamSpec]

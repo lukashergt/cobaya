@@ -11,4 +11,4 @@ speed: 7
 
 params: !defaults [params_calib, params_calib_temp, params_TT]
 
-prior: !defaults [prior_SZ]
+#prior: !defaults [prior_SZ]
