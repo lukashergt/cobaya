@@ -25,6 +25,7 @@ from inspect import cleandoc, getfullargspec
 from math import gcd
 from ast import parse
 import traceback
+from scipy import stats
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore")
@@ -989,3 +990,29 @@ def check_deprecated_modules_path(info):
         if not info.get(_packages_path):
             info[_packages_path] = info["modules"]
 # END OF DEPRECATION BLOCK
+
+
+class HighEfoldsPrior(stats.rv_continuous):
+    """Zero-peaked distribution for Omega_K0."""
+    alpha = 2
+    N = 60
+    
+    def _pdf(self, x):
+        alpha = self.alpha
+        N = self.N
+        logx = np.log(np.abs(x))
+        return (alpha-1)/(4*N)/np.abs(x) / (1 - logx / (2*N))**alpha
+    
+    def _cdf(self, x):
+        alpha = self.alpha
+        N = self.N
+        logx = np.log(np.abs(x))
+        return (1 + np.sign(x) * (1 - logx / (2*N)) ** (1-alpha)) / 2
+    
+    def _ppf(self, x):
+        alpha = self.alpha
+        N = self.N
+        sgn = np.sign(x - 1/2)
+        return sgn * np.exp(2 * N * (1 - np.abs(1-2*x) ** (1/(1-alpha))))
+stats.highefoldsprior = HighEfoldsPrior(name='highefoldsprior')
+
