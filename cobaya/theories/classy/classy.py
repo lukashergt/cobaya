@@ -143,7 +143,8 @@ from typing import NamedTuple, Sequence, Union, Optional
 # Local
 from cobaya.theories._cosmo import BoltzmannBase
 from cobaya.log import LoggedError
-from cobaya.install import download_github_release, pip_install, NotInstalledError
+from cobaya.install import download_github_release, pip_install, NotInstalledError, \
+    check_gcc_version
 from cobaya.tools import load_module, VersionCheckError
 
 
@@ -162,9 +163,13 @@ non_linear_default_code = "hmcode"
 
 
 class classy(BoltzmannBase):
+    r"""
+    CLASS cosmological Boltzmann code \cite{Blas:2011rf}.
+    """
     # Name of the Class repo/folder and version to download
     _classy_repo_name = "lesgourg/class_public"
     _min_classy_version = "v2.9.3"
+    _classy_min_gcc_version = "6.4"  # Lower ones are possible atm, but leak memory!
     _classy_repo_version = os.environ.get('CLASSY_REPO_VERSION', _min_classy_version)
 
     def initialize(self):
@@ -190,26 +195,36 @@ class classy(BoltzmannBase):
         self.derived_extra = []
         self.log.info("Initialized!")
 
+    def set_cl_reqs(self, reqs):
+        """
+        Sets some common settings for both lensend and unlensed Cl's.
+        """
+        if any(("t" in cl.lower()) for cl in reqs):
+            self.extra_args["output"] += " tCl"
+        if any((("e" in cl.lower()) or ("b" in cl.lower())) for cl in reqs):
+            self.extra_args["output"] += " pCl"
+        # For l_max_scalars, remember previous entries.
+        self.extra_args["l_max_scalars"] = \
+            max(self.extra_args.get("l_max_scalars", 0), max(reqs.values()))
+        if 'T_cmb' not in self.derived_extra:
+            self.derived_extra += ['T_cmb']
+
     def must_provide(self, **requirements):
         # Computed quantities required by the likelihood
         super().must_provide(**requirements)
         for k, v in self._must_provide.items():
             # Products and other computations
             if k == "Cl":
-                if any(("t" in cl.lower()) for cl in v):
-                    self.extra_args["output"] += " tCl"
-                if any((("e" in cl.lower()) or ("b" in cl.lower())) for cl in v):
-                    self.extra_args["output"] += " pCl"
+                self.set_cl_reqs(v)
                 # For modern experiments, always lensed Cl's!
                 self.extra_args["output"] += " lCl"
                 self.extra_args["lensing"] = "yes"
-                # For l_max_scalars, remember previous entries.
-                self.extra_args["l_max_scalars"] = \
-                    max(self.extra_args.get("l_max_scalars", 0), max(v.values()))
                 self.collectors[k] = Collector(
                     method="lensed_cl", kwargs={"lmax": self.extra_args["l_max_scalars"]})
-                if 'T_cmb' not in self.derived_extra:
-                    self.derived_extra += ['T_cmb']
+            elif k == "unlensed_Cl":
+                self.set_cl_reqs(v)
+                self.collectors[k] = Collector(
+                    method="raw_cl", kwargs={"lmax": self.extra_args["l_max_scalars"]})
             elif k == "Hubble":
                 self.collectors[k] = Collector(
                     method="Hubble",
@@ -416,25 +431,31 @@ class classy(BoltzmannBase):
         derived_extra = {p: requested_and_extra[p] for p in self.derived_extra}
         return derived, derived_extra
 
-    def get_Cl(self, ell_factor=False, units="FIRASmuK2"):
+    def _get_Cl(self, ell_factor=False, units="FIRASmuK2", lensed=True):
+        which_key = "Cl" if lensed else "unlensed_Cl"
+        which_error = "lensed" if lensed else "unlensed"
         try:
-            cls = deepcopy(self._current_state["Cl"])
+            cls = deepcopy(self.current_state[which_key])
         except:
-            raise LoggedError(
-                self.log,
-                "No Cl's were computed. Are you sure that you have requested them?")
+            raise LoggedError(self.log, "No %s Cl's were computed. Are you sure that you "
+                              "have requested them?", which_error)
         # unit conversion and ell_factor
         ells_factor = ((cls["ell"] + 1) * cls["ell"] / (2 * np.pi))[
                       2:] if ell_factor else 1
         units_factor = self._cmb_unit_factor(
-            units, self._current_state['derived_extra']['T_cmb'])
-
+            units, self.current_state['derived_extra']['T_cmb'])
         for cl in cls:
             if cl not in ['pp', 'ell']:
                 cls[cl][2:] *= units_factor ** 2 * ells_factor
-        if "pp" in cls and ell_factor:
+        if lensed and "pp" in cls and ell_factor:
             cls['pp'][2:] *= ells_factor ** 2 * (2 * np.pi)
         return cls
+
+    def get_Cl(self, ell_factor=False, units="FIRASmuK2"):
+        return self._get_Cl(ell_factor=ell_factor, units=units, lensed=True)
+
+    def get_unlensed_Cl(self, ell_factor=False, units="FIRASmuK2"):
+        return self._get_Cl(ell_factor=ell_factor, units=units, lensed=False)
 
     def _get_z_dependent(self, quantity, z):
         try:
@@ -446,7 +467,7 @@ class classy(BoltzmannBase):
                 self.collectors[quantity].args_names.index("z")]
         i_kwarg_z = np.concatenate(
             [np.where(computed_redshifts == zi)[0] for zi in np.atleast_1d(z)])
-        values = np.array(deepcopy(self._current_state[quantity]))
+        values = np.array(deepcopy(self.current_state[quantity]))
         if quantity == "comoving_radial_distance":
             values = values[0]
         return values[i_kwarg_z]
@@ -553,7 +574,18 @@ class classy(BoltzmannBase):
         if not success:
             log.error("Could not download classy.")
             return False
+        # Compilation
+        # gcc check after downloading, in case the user wants to change the compiler by
+        # hand in the Makefile
         classy_path = cls.get_path(path)
+        if not check_gcc_version(cls._classy_min_gcc_version, error_returns=False):
+            log.error("Your gcc version is too low! CLASS would probably compile, "
+                      "but it would leak memory when running a chain. Please use a "
+                      "gcc version newer than %s. You can still compile CLASS by hand, "
+                      "maybe changing the compiler in the Makefile. CLASS has been "
+                      "downloaded into %r",
+                      cls._classy_min_gcc_version, classy_path)
+            return False
         log.info("Compiling classy...")
         from subprocess import Popen, PIPE
         env = deepcopy(os.environ)

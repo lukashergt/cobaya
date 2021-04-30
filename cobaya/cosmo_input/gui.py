@@ -11,7 +11,7 @@ import io
 # Local
 from cobaya.yaml import yaml_dump
 from cobaya.cosmo_input import input_database
-from .input_database import  _combo_dict_text
+from cobaya.cosmo_input.input_database import  _combo_dict_text
 from cobaya.cosmo_input.autoselect_covmat import get_best_covmat, covmat_folders
 from cobaya.cosmo_input.create_input import create_input
 from cobaya.bib import prettyprint_bib, get_bib_info, get_bib_component
@@ -109,6 +109,7 @@ class MainWindow(QWidget):
             group_layout = QVBoxLayout(group_box)
             for a, desc in fields:
                 self.combos[a] = QComboBox()
+                # Combo box label only if not single element in group
                 if len(fields) > 1:
                     label = QLabel(desc)
                     group_layout.addWidget(label)
@@ -140,7 +141,7 @@ class MainWindow(QWidget):
             self.display[k].setReadOnly(True)
             self.display_tabs.addTab(self.display[k], k)
         self.display["covmat"] = QWidget()
-        covmat_tab_layout = group_layout
+        covmat_tab_layout = QVBoxLayout()
         self.display["covmat"].setLayout(covmat_tab_layout)
         self.covmat_text = QLabel()
         self.covmat_text.setWordWrap(True)
@@ -242,7 +243,7 @@ class MainWindow(QWidget):
             comments_text = ""
         self.display["python"].setText("info = " + pformat(info) + comments_text)
         self.display["yaml"].setText(yaml_dump(sort_cosmetic(info)) + comments_text)
-        self.display["bibliography"].setText(prettyprint_bib(get_bib_info(info)))
+        self.display["bibliography"].setText(prettyprint_bib(*get_bib_info(info)))
         # Display covmat
         packages_path = resolve_packages_path()
         if not packages_path:
