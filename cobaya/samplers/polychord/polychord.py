@@ -140,7 +140,7 @@ class polychord(Sampler):
                    "cluster_posteriors", "write_resume", "read_resume", "write_stats",
                    "write_live", "write_dead", "base_dir", "grade_frac", "grade_dims",
                    "feedback", "read_resume", "base_dir", "file_root", "grade_frac",
-                   "grade_dims"]
+                   "grade_dims", "synchronous"]
         # As stated above, num_repeats is ignored, so let's not pass it
         pc_args.pop(pc_args.index("num_repeats"))
         self.pc_settings = PolyChordSettings(
@@ -217,9 +217,13 @@ class polychord(Sampler):
             if len(loglikes) != self.n_likes:
                 loglikes = np.full(self.n_likes, np.nan)
             derived = list(derived) + list(logpriors) + list(loglikes)
-            return (
-                max(loglikes.sum(), self.pc_settings.logzero),
-                derived)
+            if -np.inf in logpriors:
+                return self.pc_settings.logzero, derived
+            else:
+                return (
+                    max(loglikes.sum(), self.pc_settings.logzero),
+                    derived
+                    )
 
         sync_processes()
         self.mpi_info("Calling PolyChord...")
