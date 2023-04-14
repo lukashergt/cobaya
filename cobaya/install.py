@@ -97,6 +97,8 @@ def install(*infos, **kwargs):
     :param skip_global: skip installation of already-available Python modules (default:
        ``False``).
     :param debug: produce verbose debug output  (default: ``False``).
+    :param path: optional path where to install the packages
+                 (defaults to any packages_path entry given in the info dictionaries).
     :param code: set to ``False`` to skip code packages (default: ``True``).
     :param data: set to ``False`` to skip data packages (default: ``True``).
     :param no_progress_bars: no progress bars shown; use when output is saved into a text
@@ -486,7 +488,7 @@ def download_github_release(base_directory, repo_name, release_name=None, *, ass
         release_name = (data or {}).get('default_branch', 'main')
     if asset:
         url = (base_url + "/releases/download/" + release_name + "/" + asset)
-        # Assest would get decompressed in base directory
+        # Asset would get decompressed in base directory
         download_directory = os.path.join(download_directory, directory or repo_name)
     else:
         url = (base_url + "/archive/" + release_name + ".tar.gz")
