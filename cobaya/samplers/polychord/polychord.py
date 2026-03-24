@@ -320,7 +320,11 @@ class polychord(Sampler):
             if -np.inf in result.logpriors:
                 return self.pc_settings.logzero, derived
             else:
-                return max(loglikes.sum(), self.pc_settings.logzero), derived
+                return (
+                    max(loglikes.sum() + sum(result.logpriors[1:]),
+                        self.pc_settings.logzero),
+                    derived
+                )
 
         def prior(cube):
             theta = np.empty_like(cube)
