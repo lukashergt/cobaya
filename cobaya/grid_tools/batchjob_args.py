@@ -63,7 +63,8 @@ class BatchArgs:
             "--name",
             default=None,
             nargs="+",
-            help="specific chain full name only (base_paramx_data1_data2)",
+            help="specific chain full name only (base__data1_data2__paramx), "
+                 "e.g. `CPPC3d1000__TTTEEE-HPbincut__LCDM",
         )
         self.parser.add_argument(
             "--param",
@@ -75,7 +76,7 @@ class BatchArgs:
             "--paramtag",
             default=None,
             nargs="+",
-            help="runs with specific parameter tag only (base_paramx)",
+            help="runs with specific parameter tag only (e.g. `LCDM`, `LCDM_OmegaK`)",
         )
         self.parser.add_argument(
             "--data",

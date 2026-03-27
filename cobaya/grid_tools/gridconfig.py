@@ -38,7 +38,7 @@ def get_args(vals=None):
         help=(
             "root directory containing/to contain the grid "
             "(e.g. grid_folder where output directories are created "
-            "at grid_folder/base/base_xx)"
+            "at grid_folder/paramtag/base__datatag__paramtag)"
         ),
     )
     parser.add_argument(
@@ -319,7 +319,7 @@ def makeGrid(
 
         # Minimize
         info = set_minimize(info, minimize_defaults)
-        yaml_dump_file(job_item.yaml_file("_minimize"), info, error_if_exists=False)
+        yaml_dump_file(job_item.yaml_file(".minimize"), info, error_if_exists=False)
 
         # Importance sampling
         for imp in job_item.importanceJobs():
@@ -338,7 +338,7 @@ def makeGrid(
             yaml_dump_file(imp.yaml_file(), info_post, error_if_exists=False)
             if getattr(imp, "want_minimize", True):
                 info = set_minimize(dict(info, **info_post), minimize_defaults)
-                yaml_dump_file(imp.yaml_file("_minimize"), info, error_if_exists=False)
+                yaml_dump_file(imp.yaml_file(".minimize"), info, error_if_exists=False)
 
     if not interactive:
         return batch
