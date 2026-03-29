@@ -237,16 +237,16 @@ class JobItem(PropertiesItem):
     def __init__(
         self, path, param_set, data_set, base="base", group_name=None, minimize=True
     ):
-        self.param_set = param_set  # e.g. `LCDM` or `LCDM_OmegaK`
+        self.param_set = param_set
         if not isinstance(data_set, DataSet):
             data_set = DataSet(data_set[0], data_set[1])
         self.data_set = data_set
         self.base = base
-        self.paramtag = "_".join(param_set)  # e.g. `LCDM_OmegaK`
-        self.datatag = data_set.tag  # e.g. `TTTEEE-HPbincut`
-        self.name = self.base + "__" + self.datatag + "__" + self.paramtag  # e.g. `CPPC3d1000__TTTEEE-HPbincut__LCDM_OmegaK`
+        self.paramtag = "_".join([base] + param_set)
+        self.datatag = data_set.tag
+        self.name = self.paramtag + "_" + self.datatag
         self.batchPath = path
-        self.relativePath = self.paramtag + os.sep + self.name + os.sep
+        self.relativePath = self.paramtag + os.sep + self.datatag + os.sep
         self.chainPath = path + self.relativePath
         self.chainRoot = self.chainPath + self.name
         self.distPath = self.chainPath + "dist" + os.sep
@@ -329,7 +329,10 @@ class JobItem(PropertiesItem):
     def makeNormedName(self, dataSubs=None):
         normed_params = "_".join(sorted(self.param_set))
         normed_data = self.data_set.makeNormedDatatag(dataSubs)
-        normed_name = self.base + "__" + normed_data + "__" + normed_params
+        normed_name = self.base
+        if len(normed_params) > 0:
+            normed_name += "_" + normed_params
+        normed_name += "_" + normed_data
         return normed_name, normed_params, normed_data
 
     def makeIDs(self):
@@ -601,7 +604,7 @@ class BatchJob(PropertiesItem):
                         model = (
                             (model_info.pop("tags", []) or [])
                             if "tags" in model_info
-                            else [model]
+                            else model.split("_")
                         )
                     elif not isinstance(model, (list, tuple)):
                         raise ValueError(
@@ -696,9 +699,14 @@ class BatchJob(PropertiesItem):
         base="base",
         returnJobItem=False,
     ):
-        if not paramtag:
-            paramtag = ""
-        name = base + "__" + self.normalizeDataTag(datatag) + "__" + paramtag
+        if paramtag:
+            if isinstance(paramtag, str):
+                paramtag = paramtag.split("_")
+            paramtags = [base] + sorted(paramtag)
+        else:
+            paramtag = [base]
+            paramtags = [base]
+        name = "_".join(paramtags) + "_" + self.normalizeDataTag(datatag)
 
         if jobItem := self.normed_name_item(name, wantSubItems, wantImportance):
             return jobItem if returnJobItem else jobItem.name

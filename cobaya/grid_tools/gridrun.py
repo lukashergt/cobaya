@@ -98,12 +98,12 @@ def grid_run(args=None):
 
     variant = ""
     if args.importance_minimize:
-        variant = ".minimize"
+        variant = "_minimize"
         if args.importance is None:
             args.importance = []
     if args.minimize:
         args.noimportance = True
-        variant = ".minimize"
+        variant = "_minimize"
     if args.importance is None:
         if args.importance_changed or args.importance_ready:
             args.importance = []
